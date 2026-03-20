@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Vegas Vault Elite</title>
+
+  <script src="https://js.stripe.com/v3/"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Arial';
+      background: radial-gradient(circle at top, #1a1a1a, #000);
+      color: white;
+      text-align: center;
+    }
+
+    header {
+      background: linear-gradient(90deg, #000, #222);
+      padding: 20px;
+      font-size: 26px;
+      color: gold;
+      box-shadow: 0 0 20px gold;
+    }
+
+    .card {
+      background: #111;
+      margin: 15px;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(255,215,0,0.3);
+    }
+
+    input {
+      padding: 12px;
+      width: 200px;
+      border-radius: 5px;
+      border: none;
+    }
+
+    button {
+      padding: 12px 20px;
+      margin: 8px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      background: linear-gradient(45deg, gold, orange);
+      box-shadow: 0 0 10px gold;
+    }
+
+    .vip {
+      background: linear-gradient(45deg, purple, magenta);
+      color: white;
+    }
+
+    .slots span {
+      font-size: 70px;
+      margin: 10px;
+      display: inline-block;
+      animation: spin 0.3s ease;
+    }
+
+    @keyframes spin {
+      from { transform: rotateY(0deg); }
+      to { transform: rotateY(360deg); }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>🎰 Vegas Vault Elite</header>
+
+<div class="card">
+  <h2>🎁 Get Free Spins</h2>
+  <input id="email" placeholder="Email">
+  <button onclick="captureLead()">Claim</button>
+</div>
+
+<div class="card" id="loginBox">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username">
+  <button onclick="login()">Enter</button>
+</div>
+
+<div id="app" style="display:none;">
+
+  <div class="card">
+    <h2 id="welcome"></h2>
+    <p id="points"></p>
+    <p id="vipStatus"></p>
+    <button onclick="daily()">🎁 Daily Bonus</button>
+    <button class="vip" onclick="buyVIP()">💎 Go VIP</button>
+  </div>
+
+  <div class="card">
+    <h3>🎰 Slots</h3>
+    <div class="slots">
+      <span id="s1">🍒</span>
+      <span id="s2">🍋</span>
+      <span id="s3">🍊</span>
+    </div>
+    <button onclick="spin()">Spin</button>
+  </div>
+
+  <div class="card">
+    <h3>🎡 VIP Wheel</h3>
+    <h1 id="wheel">?</h1>
+    <button onclick="spinWheel()">Spin Wheel</button>
+  </div>
+
+  <div class="card">
+    <h3>🏆 Leaderboard</h3>
+    <div id="board"></div>
+  </div>
+
+</div>
+
+<script>
+const API = "http://localhost:5000";
+const stripe = Stripe("YOUR_PUBLIC_KEY");
+
+let user="", points=0, vip=false;
+
+let symbols=["🍒","🍋","🍊","⭐","💎"];
+let rewards=[10,50,100,200];
+
+function login(){
+  user = username.value;
+  if(!user) return;
+
+  loginBox.style.display="none";
+  app.style.display="block";
+  welcome.innerText="Welcome "+user;
+
+  loadUser();
+}
+
+function spin(){
+  let a=r(),b=r(),c=r();
+  s1.innerText=a; s2.innerText=b; s3.innerText=c;
+
+  points += (a===b && b===c)?100:10;
+  save();
+}
+
+function spinWheel(){
+  if(!vip){
+    alert("VIP ONLY");
+    return;
+  }
+
+  let rwd = rewards[Math.floor(Math.random()*rewards.length)];
+  wheel.innerText=rwd;
+  points += rwd;
+
+  save();
+}
+
+function daily(){
+  points += vip ? 100 : 50;
+  save();
+}
+
+function r(){ return symbols[Math.floor(Math.random()*symbols.length)]; }
+
+function save(){
+  fetch(API+"/save-user",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({username:user,points})
+  });
+  update();
+}
+
+function loadUser(){
+  fetch(API+"/leaderboard")
+  .then(r=>r.json())
+  .then(data=>{
+    if(data[user]) points=data[user];
+    update();
+  });
+}
+
+function update(){
+  vip = points > 1000;
+
+  pointsDisplay();
+  leaderboard();
+}
+
+function pointsDisplay(){
+  document.getElementById("points").innerText="Points: "+points;
+  vipStatus.innerText="Status: "+(vip?"VIP":"Standard");
+}
+
+function leaderboard(){
+  fetch(API+"/leaderboard")
+  .then(r=>r.json())
+  .then(data=>{
+    let html="";
+    for(let u in data){
+      html += `<div>${u}: ${data[u]}</div>`;
+    }
+    board.innerHTML=html;
+  });
+}
+
+function captureLead(){
+  fetch(API+"/lead",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({email:email.value})
+  });
+  alert("Bonus added");
+}
+
+function buyVIP(){
+  fetch(API+"/create-checkout-session",{method:"POST"})
+  .then(r=>r.json())
+  .then(d=>stripe.redirectToCheckout({sessionId:d.id}));
+}
+</script>
+
+</body>
+</html>
